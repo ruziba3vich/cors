@@ -50,7 +50,7 @@ func (u *Utils) GenerateJWT(username string) (string, error) {
 func (u *Utils) ValidateJWT(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return u.jwtSecret, nil
+		return []byte(u.jwtSecret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, err

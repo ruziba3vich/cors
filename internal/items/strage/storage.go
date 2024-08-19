@@ -8,14 +8,16 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/ruziba3vich/cors/internal/items/models"
+	"github.com/ruziba3vich/cors/internal/items/repo"
 	"github.com/ruziba3vich/cors/internal/pkg/utils"
 )
 
 type (
 	Storage struct {
-		rdb    *redis.Client
-		logger *log.Logger
-		utils  *utils.Utils
+		rdb         *redis.Client
+		logger      *log.Logger
+		utils       *utils.Utils
+		corsStorage repo.CORSRepo
 	}
 )
 
@@ -63,6 +65,12 @@ func (s *Storage) LoginUser(ctx context.Context, req *models.User) (*models.Logi
 			s.logger.Println(err)
 			return nil, err
 		}
+
+		s.corsStorage.CreateOrigin(ctx, &models.CreateOriginRequest{
+			Username: req.Username,
+			Origin:   "http://localhost:7777/origins",
+		})
+
 		return &models.LoginUserResponse{
 			User:  req,
 			Token: newToken,
