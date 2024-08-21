@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ruziba3vich/cors/internal/items/models"
@@ -13,17 +15,52 @@ import (
 
 type (
 	MiddleWare struct {
-		logger  *log.Logger
-		service repo.CORSRepo
-		utils   *utils.Utils
+		logger    *log.Logger
+		service   repo.CORSRepo
+		utils     *utils.Utils
+		rateLimit map[string]*RequestCounter
+		mu        *sync.RWMutex
+	}
+
+	RequestCounter struct {
+		Count     int
+		ExpiresAt time.Time
 	}
 )
 
-func New(logger *log.Logger, service repo.CORSRepo, utils *utils.Utils) *MiddleWare {
+func New(logger *log.Logger, service repo.CORSRepo, utils *utils.Utils, mu *sync.RWMutex) *MiddleWare {
 	return &MiddleWare{
-		logger:  logger,
-		service: service,
-		utils:   utils,
+		logger:    logger,
+		service:   service,
+		utils:     utils,
+		rateLimit: make(map[string]*RequestCounter),
+		mu:        mu,
+	}
+}
+
+func (m *MiddleWare) RateLimitMiddleware(limit int, window time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		username := c.ClientIP()
+
+		counter, found := m.rateLimit[username]
+		if !found || time.Now().After(counter.ExpiresAt) {
+			m.rateLimit[username] = &RequestCounter{
+				Count:     1,
+				ExpiresAt: time.Now().Add(window),
+			}
+		} else {
+			counter.Count++
+			if counter.Count > limit {
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": "Rate limit exceeded"})
+				c.Abort()
+				return
+			}
+		}
+
+		c.Next()
 	}
 }
 

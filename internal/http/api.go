@@ -2,6 +2,8 @@ package http
 
 import (
 	"log"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ruziba3vich/cors/internal/http/handlers"
@@ -27,8 +29,10 @@ func Run(logger *log.Logger) error {
 	router.POST("login", handler.Login)
 
 	corsService := service.NewCORSImpleService(storage.NewCorsStorage(rdb, logger), logger)
-	moddleware := midware.New(logger, corsService, utilss)
+	moddleware := midware.New(logger, corsService, utilss, &sync.RWMutex{})
 	corsHandler := handlers.NewCORSHandler(logger, corsService)
+
+	router.Use(moddleware.RateLimitMiddleware(4, time.Second*time.Duration(config.GetRLS())))
 
 	worker := router.Group("/origins")
 	worker.Use(moddleware.AuthMiddleware())
